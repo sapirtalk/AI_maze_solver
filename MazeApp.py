@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import font
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from Manhatten import ManhattanSolver
@@ -6,6 +7,7 @@ from Bi_directional import BiDirectionalManhattanSolver
 import random
 import time
 import tracemalloc
+from IDA_star import IDAStarSolver
 
 
 class MazeApp:
@@ -20,35 +22,59 @@ class MazeApp:
         self.create_widgets()
 
     def create_widgets(self):
-        
+        # Create frames
         self.canvas_frame = tk.Frame(self.root)
         self.canvas_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         self.control_frame = tk.Frame(self.root)
-        self.control_frame.pack(side=tk.BOTTOM)
+        self.control_frame.pack(side=tk.BOTTOM, pady=10)
 
-       
-        tk.Label(self.control_frame, text="Maze Size:").pack(side=tk.LEFT)
-        self.size_entry = tk.Entry(self.control_frame, width=5)
-        self.size_entry.pack(side=tk.LEFT)
-        self.size_entry.insert(0, str(self.size))  
+        # Define a font for buttons and labels
+        button_font = font.Font(family="Helvetica", size=10, weight="bold")
+        label_font = font.Font(family="Helvetica", size=10)
 
-        self.generate_button = tk.Button(self.control_frame, text="Generate Maze", command=self.update_maze_size)
-        self.generate_button.pack(side=tk.LEFT)
+        # Maze Size label and entry
+        tk.Label(self.control_frame, text="Maze Size:", font=label_font).pack(side=tk.LEFT, padx=5)
+        self.size_entry = tk.Entry(self.control_frame, width=5, font=label_font)
+        self.size_entry.pack(side=tk.LEFT, padx=5)
+        self.size_entry.insert(0, str(self.size))
 
-        self.solve_button = tk.Button(self.control_frame, text="Solve Maze", command=lambda: self.solve_maze(self.heuristic_var.get()))
-        self.solve_button.pack(side=tk.LEFT)
+        # Generate Maze button
+        self.generate_button = tk.Button(
+            self.control_frame, text="Generate Maze", command=self.update_maze_size,
+            font=button_font, bg="#4CAF50", fg="white", padx=10, pady=5
+        )
+        self.generate_button.pack(side=tk.LEFT, padx=5)
 
-        self.graph_button = tk.Button(self.control_frame, text="Graph Size/Accuracy", command=lambda: self.graph_size_accuracy(self.heuristic_var.get()))
-        self.graph_button.pack(side=tk.LEFT)
+        # Solve Maze button
+        self.solve_button = tk.Button(
+            self.control_frame, text="Solve Maze", command=lambda: self.solve_maze(self.heuristic_var.get()),
+            font=button_font, bg="#2196F3", fg="white", padx=10, pady=5
+        )
+        self.solve_button.pack(side=tk.LEFT, padx=5)
 
-        self.solver_compare_button = tk.Button(self.control_frame, text="Compare Solvers", command=self.plot_comparison_chart)
-        self.solver_compare_button.pack(side=tk.LEFT)
+        # Graph Size/Accuracy button
+        self.graph_button = tk.Button(
+            self.control_frame, text="Graph Size/Accuracy", command=lambda: self.graph_size_accuracy(self.heuristic_var.get()),
+            font=button_font, bg="#FFC107", fg="black", padx=10, pady=5
+        )
+        self.graph_button.pack(side=tk.LEFT, padx=5)
 
+        # Compare Solvers button
+        self.solver_compare_button = tk.Button(
+            self.control_frame, text="Compare Solvers", command=self.plot_comparison_chart,
+            font=button_font, bg="#9C27B0", fg="white", padx=10, pady=5
+        )
+        self.solver_compare_button.pack(side=tk.LEFT, padx=5)
 
+        # Heuristic selection menu
         self.heuristic_var = tk.StringVar(value="A* with Manhattan heuristic")
-        self.heuristic_menu = tk.OptionMenu(self.control_frame, self.heuristic_var, "A* with Manhattan heuristic"  , "Bi-directional A* with Manhattan heuristic")
-        self.heuristic_menu.pack(side=tk.LEFT)
+        self.heuristic_menu = tk.OptionMenu(
+            self.control_frame, self.heuristic_var, "A* with Manhattan heuristic", "Bi-directional A* with Manhattan heuristic" , "IDA* with Manhattan heuristic"
+        )
+        self.heuristic_menu.config(font=label_font, bg="#f0f0f0", padx=5, pady=5)
+        self.heuristic_menu.pack(side=tk.LEFT, padx=5)
+
 
 
 
@@ -71,8 +97,8 @@ class MazeApp:
                 solver = ManhattanSolver(self.maze, self.start, self.end)
             elif heuristic_var == "Bi-directional A* with Manhattan heuristic":
                 solver = BiDirectionalManhattanSolver(self.maze, self.start, self.end)
-            # elif heuristic_var == "IDA* with Manhattan heuristic":
-            #     solver = IDAStarSolver(self.maze, self.start, self.end)
+            elif heuristic_var == "IDA* with Manhattan heuristic":
+                solver = IDAStarSolver(self.maze , self.start , self.end)
             else:
                 raise ValueError("Invalid heuristic option")
 
@@ -86,7 +112,10 @@ class MazeApp:
             tracemalloc.stop()  # Stop tracking memory
 
             time_taken = end_time - start_time
-            accuracy = len(path) / len(solver.explored_nodes) if solver.explored_nodes else 0
+            if heuristic_var == "IDA* with Manhattan heuristic":
+                accuracy = solver.last_bound
+            else:    
+                accuracy = len(path) / len(solver.explored_nodes) if solver.explored_nodes else 0
 
             accuracies.append(accuracy)
             memory_usages.append(peak / (1024 * 1024))  # Convert bytes to megabytes
@@ -108,7 +137,8 @@ class MazeApp:
     def plot_comparison_chart(self):
         solvers = [
             "A* with Manhattan heuristic",
-            "Bi-directional A* with Manhattan heuristic"
+            "Bi-directional A* with Manhattan heuristic",
+            "IDA* with Manhattan heuristic"
         ]
 
         avg_accuracies = []
@@ -134,7 +164,11 @@ class MazeApp:
         for i, accuracy in enumerate(avg_accuracies):
             # Calculate the midpoint between the two bars
             midpoint = (avg_memory_usages[i] + avg_times_taken[i]) / 2
-            plt.text(i, midpoint, f'Accuracy: {accuracy:.2%}', 
+            if i != 2:
+                plt.text(i, midpoint, f'Accuracy: {accuracy:.2%}', 
+                    ha='center', va='center', fontsize=12, color='black')
+            else:
+                plt.text(i, midpoint, f'Avg Bound: {accuracy:.2f}', 
                     ha='center', va='center', fontsize=12, color='black')
 
 
@@ -164,11 +198,19 @@ class MazeApp:
                 solver = ManhattanSolver(self.maze, self.start, self.end)
             elif heuristic_var == "Bi-directional A* with Manhattan heuristic":
                 solver = BiDirectionalManhattanSolver(self.maze, self.start, self.end)
+            elif heuristic_var == "IDA* with Manhattan heuristic":
+                solver = IDAStarSolver(self.maze , self.start , self.end)
             else:
                 raise ValueError("Invalid heuristic option")
 
             path = solver.solve()
-            accuracy = len(path) / len(solver.explored_nodes) if solver.explored_nodes else 0
+
+
+            if heuristic_var == "IDA* with Manhattan heuristic":
+                accuracy = solver.last_bound
+            else:    
+                accuracy = len(path) / len(solver.explored_nodes) if solver.explored_nodes else 0
+
             accuracies.append(accuracy)
 
 
@@ -281,6 +323,8 @@ class MazeApp:
             solver = ManhattanSolver(self.maze , self.start , self.end)
         elif heuristic_var == "Bi-directional A* with Manhattan heuristic":
             solver = BiDirectionalManhattanSolver(self.maze , self.start , self.end)
+        elif heuristic_var == "IDA* with Manhattan heuristic":
+            solver = IDAStarSolver(self.maze , self.start , self.end)       
         else :
             raise ValueError("invalid heuristic")
 
@@ -289,13 +333,17 @@ class MazeApp:
         path = solver.solve()
 
         if path:
-            accuracy = len(path) / len(solver.explored_nodes) if solver.explored_nodes else 0
-            self.draw_explored_path(solver.explored_nodes , path , accuracy)  # Draw the explored nodes after the solution
+            if heuristic_var == "IDA* with Manhattan heuristic":
+                accuracy = solver.last_bound
+                self.draw_explored_path(solver.explored_nodes , path , accuracy , show_last_bound = True)  # Draw the explored nodes after the solution
+            else:    
+                accuracy = len(path) / len(solver.explored_nodes) if solver.explored_nodes else 0
+                self.draw_explored_path(solver.explored_nodes , path , accuracy)  # Draw the explored nodes after the solution
         else:
             print("No path found.")
             self.draw_explored_path(solver.explored_nodes)  # Still draw the explored nodes if no solution
 
-    def draw_explored_path(self, explored_nodes , path = None , accuracy = 0):
+    def draw_explored_path(self, explored_nodes , path = None , accuracy = 0 , show_last_bound = False):
         if self.canvas:
             self.canvas.get_tk_widget().destroy()  # Clear the previous canvas if it exists
 
@@ -313,8 +361,11 @@ class MazeApp:
         ax.scatter(self.start[1], self.start[0], c='green', s=50)  # Start point
         ax.scatter(self.end[1], self.end[0], c='red', s=50)  # End point
 
-        # Display the accuracy on the plot
-        ax.text(0.5, -0.1, f"Accuracy: {accuracy:.2%}", ha='center', va='center', transform=ax.transAxes, fontsize=12, color='black')
+
+        if show_last_bound:
+            ax.text(0.5, -0.1, f"Last Bound: {accuracy}", ha='center', va='center', transform=ax.transAxes, fontsize=12, color='black')
+        else:
+            ax.text(0.5, -0.1, f"Accuracy: {accuracy:.2%}", ha='center', va='center', transform=ax.transAxes, fontsize=12, color='black')
 
 
         ax.set_xticks([])
