@@ -439,13 +439,29 @@ class MazeApp:
    
 
 
-if __name__ == "__main__":
-    root = tk.Tk()
-    tk.Button(root, text="Quit", command=lambda root=root:quit(root)).pack()
-    app = MazeApp(root)
-    root.mainloop()
 
 
 
 def quit(root):
     root.destroy()
+
+
+def restart(root):
+    root.destroy()
+    root = tk.Tk()
+    tk.Button(root, text="Quit", command=lambda root=root:quit(root)).pack()
+    tk.Button(root, text="Restart", command=lambda root=root:restart(root)).pack()
+    app = MazeApp(root)
+    root.mainloop()
+
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    tk.Button(root, text="Quit", command=lambda root=root:quit(root)).pack()
+    tk.Button(root, text="Restart", command=lambda root=root:restart(root)).pack()
+    app = MazeApp(root)
+    root.mainloop()
+
+
+
