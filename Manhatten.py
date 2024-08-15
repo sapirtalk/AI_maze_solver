@@ -1,14 +1,16 @@
 import heapq
+import time
 
 
 class ManhattanSolver:
-    def __init__(self, maze, start, end):
+    def __init__(self, maze, start, end , draw_callback):
         self.maze = maze
         self.start = start
         self.end = end
         self.size = len(maze)
         self.directions = [(0, 1), (1, 0), (0, -1), (-1, 0)] 
-        self.explored_nodes = []  
+        self.explored_nodes = []
+        self.draw_callback = draw_callback  
 
     def manhattan_distance(self, current, goal):
         return abs(current[0] - goal[0]) + abs(current[1] - goal[1])
@@ -23,7 +25,10 @@ class ManhattanSolver:
         while open_set:
             _, current = heapq.heappop(open_set)
 
-            self.explored_nodes.append(current) 
+            self.explored_nodes.append(current)
+
+            if self.draw_callback is not None:
+                self.draw_callback(self.explored_nodes) 
 
             if current == self.end:
                 return self.reconstruct_path(came_from, current)
@@ -40,7 +45,8 @@ class ManhattanSolver:
                         f_score[neighbor] = tentative_g_score + self.manhattan_distance(neighbor, self.end)
                         if neighbor not in [i[1] for i in open_set]:
                             heapq.heappush(open_set, (f_score[neighbor], neighbor))
-
+            if self.draw_callback is not None:                
+                time.sleep(0.1/self.size)
         return None 
 
     def reconstruct_path(self, came_from, current):

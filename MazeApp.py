@@ -8,6 +8,7 @@ import random
 import time
 import tracemalloc
 from IDA_star import IDAStarSolver
+import sys
 
 
 class MazeApp:
@@ -18,7 +19,9 @@ class MazeApp:
         self.maze = [[1 for _ in range(self.size)] for _ in range(self.size)]  
         self.start = (0, 0)
         self.end = (self.size - 1, self.size - 1)
-        self.canvas = None  
+        self.canvas = None
+        self.fig, self.ax = None, None  # Initialize figure and axis 
+        self.solver_instance = None  # To store current solver instance 
         self.create_widgets()
 
     def create_widgets(self):
@@ -67,6 +70,13 @@ class MazeApp:
         )
         self.solver_compare_button.pack(side=tk.LEFT, padx=5)
 
+        # Reset button
+        self.reset_button = tk.Button(
+            self.control_frame, text="Reset", command=self.reset_solver,
+            font=button_font, bg="#FFC107", fg="black", padx=10, pady=5, state=tk.DISABLED
+        )
+        self.reset_button.pack(side=tk.LEFT, padx=5)
+
         # Heuristic selection menu
         self.heuristic_var = tk.StringVar(value="A* with Manhattan heuristic")
         self.heuristic_menu = tk.OptionMenu(
@@ -76,8 +86,42 @@ class MazeApp:
         self.heuristic_menu.pack(side=tk.LEFT, padx=5)
 
 
+    def reset_solver(self):
+        """Reset the current solver, keep the maze intact, and reset the visualization."""
+        # Clear the solver instance
+        self.solver_instance = None
 
+        # Stop the
+        
+        # Clear the visualized path (reset the drawing on the canvas)
+        if self.ax:
+            self.ax.clear()  # Clear the existing plot
+            self.ax.imshow(self.maze, cmap='binary')  # Redraw the maze
+            self.ax.scatter(self.start[1], self.start[0], c='green', s=100)  # Start point
+            self.ax.scatter(self.end[1], self.end[0], c='red', s=100)  # End point
+            self.ax.set_xticks([])
+            self.ax.set_yticks([])
+            self.canvas.draw()  # Redraw the canvas
 
+        # Re-enable the Solve button and disable the Reset button
+        self.reset_button.config(state=tk.DISABLED)
+        self.solve_button.config(state=tk.NORMAL)
+        self.generate_button.config(state=tk.NORMAL)
+        self.heuristic_menu.config(state=tk.NORMAL)
+
+    def enable_controls(self):
+        """Enable buttons after the solving process is complete."""
+        self.generate_button.config(state=tk.NORMAL)
+        self.solve_button.config(state=tk.NORMAL)
+        self.heuristic_menu.config(state=tk.NORMAL)
+        self.reset_button.config(state=tk.DISABLED)
+
+    def disable_controls(self):
+        """Disable buttons during the solving process."""
+        self.generate_button.config(state=tk.DISABLED)
+        self.solve_button.config(state=tk.DISABLED)
+        self.heuristic_menu.config(state=tk.DISABLED)
+        self.reset_button.config(state=tk.NORMAL)    
 
 
     # take the statistics from the specific solver
@@ -94,11 +138,11 @@ class MazeApp:
             self.generate_maze()
 
             if heuristic_var == "A* with Manhattan heuristic":
-                solver = ManhattanSolver(self.maze, self.start, self.end)
+                solver = ManhattanSolver(self.maze, self.start, self.end , None)
             elif heuristic_var == "Bi-directional A* with Manhattan heuristic":
-                solver = BiDirectionalManhattanSolver(self.maze, self.start, self.end)
+                solver = BiDirectionalManhattanSolver(self.maze, self.start, self.end , None)
             elif heuristic_var == "IDA* with Manhattan heuristic":
-                solver = IDAStarSolver(self.maze , self.start , self.end)
+                solver = IDAStarSolver(self.maze , self.start , self.end , None)
             else:
                 raise ValueError("Invalid heuristic option")
 
@@ -153,7 +197,7 @@ class MazeApp:
 
         bar_width = 0.3
         indices = range(len(solvers))
-
+        plt.clf()
         plt.figure(figsize=(10, 6))
 
         # Plotting the bars for memory usage and time taken
@@ -171,7 +215,7 @@ class MazeApp:
                 plt.text(i, midpoint, f'Avg Bound: {accuracy:.2f}', 
                     ha='center', va='center', fontsize=12, color='black')
 
-
+        # clear the current figure
         plt.xticks(indices, solvers)
         plt.xlabel('Solvers')
         plt.ylabel('Values (AVG)')
@@ -195,11 +239,11 @@ class MazeApp:
             self.generate_maze()
 
             if heuristic_var == "A* with Manhattan heuristic":
-                solver = ManhattanSolver(self.maze, self.start, self.end)
+                solver = ManhattanSolver(self.maze, self.start, self.end , None)
             elif heuristic_var == "Bi-directional A* with Manhattan heuristic":
-                solver = BiDirectionalManhattanSolver(self.maze, self.start, self.end)
+                solver = BiDirectionalManhattanSolver(self.maze, self.start, self.end , None)
             elif heuristic_var == "IDA* with Manhattan heuristic":
-                solver = IDAStarSolver(self.maze , self.start , self.end)
+                solver = IDAStarSolver(self.maze , self.start , self.end , None)
             else:
                 raise ValueError("Invalid heuristic option")
 
@@ -218,6 +262,9 @@ class MazeApp:
         for i in range(1, len(accuracies) - 1):
             accuracies[i] = (accuracies[i - 1] + accuracies[i] + accuracies[i + 1]) / 3
 
+
+        # clear the current figure
+        plt.clf()
         plt.plot(sizes, accuracies)
         
         plt.xlabel("Maze Size")
@@ -243,6 +290,9 @@ class MazeApp:
             print("Invalid size input. Please enter a positive integer greater than 4.")
 
     def generate_maze(self):
+
+        
+
         self.maze = [[1 for _ in range(self.size)] for _ in range(self.size)]  # Reset maze with walls
         self.start = (0, 0)
         self.end = (self.size - 1, self.size - 1)
@@ -300,35 +350,41 @@ class MazeApp:
         #     self.maze[end_y][end_x - 1] = 0
 
     def draw_maze(self):
-        if self.canvas:
-            self.canvas.get_tk_widget().destroy()  # Clear the previous canvas if it exists
+        if not self.fig or not self.ax:
+            self.fig, self.ax = plt.subplots(figsize=(6, 6))
+            self.ax.imshow(self.maze, cmap='binary')
+            self.ax.scatter(self.start[1], self.start[0], c='green', s=100)
+            self.ax.scatter(self.end[1], self.end[0], c='red', s=100)
+            self.ax.set_xticks([])
+            self.ax.set_yticks([])
 
-        fig, ax = plt.subplots(figsize=(6, 6))
-        ax.imshow(self.maze, cmap='binary')
-        ax.scatter(self.start[1], self.start[0], c='green', s=100)  # Start point
-        ax.scatter(self.end[1], self.end[0], c='red', s=100)  # End point
-        ax.set_xticks([])
-        ax.set_yticks([])
-        plt.close(fig)  # Close the figure to prevent it from displaying in a separate window
+            self.canvas = FigureCanvasTkAgg(self.fig, master=self.canvas_frame)
+            self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+            self.canvas.draw()
 
-        # Embed the figure in the Tkinter canvas
-        self.canvas = FigureCanvasTkAgg(fig, master=self.canvas_frame)
-        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self.canvas.draw()
+        else:
+            self.ax.clear()
+            self.ax.imshow(self.maze, cmap='binary')
+            self.ax.scatter(self.start[1], self.start[0], c='green', s=100)
+            self.ax.scatter(self.end[1], self.end[0], c='red', s=100)
+            self.ax.set_xticks([])
+            self.ax.set_yticks([])
+            self.canvas.draw()
 
     def solve_maze(self , heuristic_var = "A* with Manhattan heuristic"):
         
+        self.disable_controls()
 
         if heuristic_var == "A* with Manhattan heuristic":
-            solver = ManhattanSolver(self.maze , self.start , self.end)
+            solver = ManhattanSolver(self.maze , self.start , self.end , self.draw_explored_path)
         elif heuristic_var == "Bi-directional A* with Manhattan heuristic":
-            solver = BiDirectionalManhattanSolver(self.maze , self.start , self.end)
+            solver = BiDirectionalManhattanSolver(self.maze , self.start , self.end , self.draw_explored_path)
         elif heuristic_var == "IDA* with Manhattan heuristic":
-            solver = IDAStarSolver(self.maze , self.start , self.end)       
+            solver = IDAStarSolver(self.maze , self.start , self.end , self.draw_explored_path)       
         else :
             raise ValueError("invalid heuristic")
 
-
+        self.solver_instance = solver
 
         path = solver.solve()
 
@@ -343,41 +399,53 @@ class MazeApp:
             print("No path found.")
             self.draw_explored_path(solver.explored_nodes)  # Still draw the explored nodes if no solution
 
-    def draw_explored_path(self, explored_nodes , path = None , accuracy = 0 , show_last_bound = False):
-        if self.canvas:
-            self.canvas.get_tk_widget().destroy()  # Clear the previous canvas if it exists
+    def draw_explored_path(self, explored_nodes, path=None, accuracy=0, show_last_bound=False):
+        if not self.fig or not self.ax:
+            self.fig, self.ax = plt.subplots(figsize=(6, 6))
+            self.canvas = FigureCanvasTkAgg(self.fig, master=self.canvas_frame)
+            self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        fig, ax = plt.subplots(figsize=(6, 6))
-        ax.imshow(self.maze, cmap='binary')
+        self.ax.clear()  # Clear only the content of the axes, not the whole figure
+
+        # Draw the maze background
+        self.ax.imshow(self.maze, cmap='binary')
 
         # Draw the explored nodes
         for node in explored_nodes:
-
             if path and node not in path:
-                ax.scatter(node[1], node[0], c='yellow', s=50) 
-            else :
-                ax.scatter(node[1], node[0], c='blue', s=50)    
+                self.ax.scatter(node[1], node[0], c='yellow', s=50) 
+            else:
+                self.ax.scatter(node[1], node[0], c='blue', s=50)
 
-        ax.scatter(self.start[1], self.start[0], c='green', s=50)  # Start point
-        ax.scatter(self.end[1], self.end[0], c='red', s=50)  # End point
+        # Draw start and end points
+        self.ax.scatter(self.start[1], self.start[0], c='green', s=50)  # Start point
+        self.ax.scatter(self.end[1], self.end[0], c='red', s=50)  # End point
 
-
+        # Display accuracy or last bound
         if show_last_bound:
-            ax.text(0.5, -0.1, f"Last Bound: {accuracy}", ha='center', va='center', transform=ax.transAxes, fontsize=12, color='black')
+            self.ax.text(0.5, -0.1, f"Last Bound: {accuracy}", ha='center', va='center', transform=self.ax.transAxes, fontsize=12, color='black')
         else:
-            ax.text(0.5, -0.1, f"Accuracy: {accuracy:.2%}", ha='center', va='center', transform=ax.transAxes, fontsize=12, color='black')
+            self.ax.text(0.5, -0.1, f"Accuracy: {accuracy:.2%}", ha='center', va='center', transform=self.ax.transAxes, fontsize=12, color='black')
 
+        # Hide ticks
+        self.ax.set_xticks([])
+        self.ax.set_yticks([])
 
-        ax.set_xticks([])
-        ax.set_yticks([])
-        plt.close(fig)  # Close the figure to prevent it from displaying in a separate window
-
-        # Embed the figure in the Tkinter canvas
-        self.canvas = FigureCanvasTkAgg(fig, master=self.canvas_frame)
-        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        # Redraw the canvas
         self.canvas.draw()
+        self.root.update()
+
+
+   
+
 
 if __name__ == "__main__":
     root = tk.Tk()
+    tk.Button(root, text="Quit", command=lambda root=root:quit(root)).pack()
     app = MazeApp(root)
     root.mainloop()
+
+
+
+def quit(root):
+    root.destroy()

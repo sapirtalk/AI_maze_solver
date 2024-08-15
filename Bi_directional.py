@@ -1,7 +1,8 @@
 import heapq
+import time
 
 class BiDirectionalManhattanSolver:
-    def __init__(self, maze, start, end):
+    def __init__(self, maze, start, end , draw_callback):
         self.maze = maze
         self.start = start
         self.end = end
@@ -10,6 +11,7 @@ class BiDirectionalManhattanSolver:
         self.explored_nodes_forward = []  # List to keep track of explored nodes in the forward search
         self.explored_nodes_backward = []  # List to keep track of explored nodes in the backward search
         self.explored_nodes = []  # List to keep track of explored nodes in both searches
+        self.draw_callback = draw_callback
 
     def manhattan_distance(self, current, goal):
         return abs(current[0] - goal[0]) + abs(current[1] - goal[1])
@@ -44,12 +46,17 @@ class BiDirectionalManhattanSolver:
             self.explored_nodes_backward.append(current_backward)
             self.explored_nodes.append(current_backward)
 
+            if self.draw_callback is not None:
+                self.draw_callback(self.explored_nodes)
+
             # Check if the searches meet
             if current_forward in visited_backward:
                 return self.reconstruct_path(came_from_forward, came_from_backward, current_forward)
             if current_backward in visited_forward:
                 return self.reconstruct_path(came_from_backward, came_from_forward, current_backward, reverse=True)
 
+            if self.draw_callback is not None:
+                time.sleep(0.1)
         return None  # No path found
 
     def expand_search(self, open_set, visited, g_score, f_score, came_from, goal):
