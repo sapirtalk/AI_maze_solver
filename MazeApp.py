@@ -49,6 +49,14 @@ class MazeApp:
         )
         self.generate_button.pack(side=tk.LEFT, padx=5)
 
+        # Allow Maze Loops checkbox
+        self.allow_loops_var = tk.BooleanVar()
+        self.allow_loops_var.set(False)
+        self.allow_loops_checkbox = tk.Checkbutton(
+            self.control_frame, text="Allow Maze Loops", variable=self.allow_loops_var, font=label_font
+        )
+        self.allow_loops_checkbox.pack(side=tk.LEFT, padx=5)
+
         # Solve Maze button
         self.solve_button = tk.Button(
             self.control_frame, text="Solve Maze", command=lambda: self.solve_maze(self.heuristic_var.get()),
@@ -298,7 +306,38 @@ class MazeApp:
         self.end = (self.size - 1, self.size - 1)
         self.prim_maze_generation()
         self.ensure_clear_start_end()
+        if self.allow_loops_var.get():
+            self.add_loops()
         self.draw_maze()
+
+
+
+    def add_loops(self):
+        
+        print ("Adding loops")
+        
+        potential_walls = []
+
+        # Find all potential walls that can be removed
+        for y in range(1, self.size - 1):  # Only check walls between passages
+            for x in range(1, self.size - 1):
+                if self.maze[y][x] == 1:
+                    # Check if removing this wall would connect two paths (open spaces)
+                    # Look at the two cells on either side of the wall
+                    if (self.maze[y][x - 1] == 0 and self.maze[y][x + 1] == 0) or (self.maze[y - 1][x] == 0 and self.maze[y + 1][x] == 0):
+                        potential_walls.append((x, y))
+
+
+        # Randomly select walls to remove
+        for wall in potential_walls:
+            x, y = wall
+            if random.random() < 0.1:
+                self.maze[y][x] = 0
+               
+            
+
+
+
 
     def prim_maze_generation(self):
         start_x, start_y = 1, 1
