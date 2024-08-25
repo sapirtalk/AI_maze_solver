@@ -8,6 +8,7 @@ import random
 import time
 import tracemalloc
 from IDA_star import IDAStarSolver
+from Custom import CustomSolver
 import sys
 
 
@@ -17,8 +18,8 @@ class MazeApp:
         self.root.title("Maze Generator and Solver")
         self.size = 21  
         self.maze = [[1 for _ in range(self.size)] for _ in range(self.size)]  
-        self.start = (0, 0)
-        self.end = (self.size - 1, self.size - 1)
+        self.start = None
+        self.end = None
         self.canvas = None
         self.fig, self.ax = None, None  # Initialize figure and axis 
         self.solver_instance = None  # To store current solver instance 
@@ -88,7 +89,7 @@ class MazeApp:
         # Heuristic selection menu
         self.heuristic_var = tk.StringVar(value="A* with Manhattan heuristic")
         self.heuristic_menu = tk.OptionMenu(
-            self.control_frame, self.heuristic_var, "A* with Manhattan heuristic", "Bi-directional A* with Manhattan heuristic" , "IDA* with Manhattan heuristic"
+            self.control_frame, self.heuristic_var, "A* with Manhattan heuristic", "Bi-directional A* with Manhattan heuristic" , "IDA* with Manhattan heuristic" , "Custom Solver"
         )
         self.heuristic_menu.config(font=label_font, bg="#f0f0f0", padx=5, pady=5)
         self.heuristic_menu.pack(side=tk.LEFT, padx=5)
@@ -151,6 +152,8 @@ class MazeApp:
                 solver = BiDirectionalManhattanSolver(self.maze, self.start, self.end , None)
             elif heuristic_var == "IDA* with Manhattan heuristic":
                 solver = IDAStarSolver(self.maze , self.start , self.end , None)
+            elif heuristic_var == "Custom Solver":
+                solver = CustomSolver(self.maze , self.start , self.end , None)
             else:
                 raise ValueError("Invalid heuristic option")
 
@@ -166,6 +169,8 @@ class MazeApp:
             time_taken = end_time - start_time
             if heuristic_var == "IDA* with Manhattan heuristic":
                 accuracy = solver.last_bound
+            elif heuristic_var == "Custom Solver":
+                accuracy = (solver.end_last_bound + solver.start_last_bound)/2
             else:    
                 accuracy = len(path) / len(solver.explored_nodes) if solver.explored_nodes else 0
 
@@ -190,7 +195,8 @@ class MazeApp:
         solvers = [
             "A* with Manhattan heuristic",
             "Bi-directional A* with Manhattan heuristic",
-            "IDA* with Manhattan heuristic"
+            "IDA* with Manhattan heuristic",
+            "Custom Solver"
         ]
 
         avg_accuracies = []
@@ -252,6 +258,8 @@ class MazeApp:
                 solver = BiDirectionalManhattanSolver(self.maze, self.start, self.end , None)
             elif heuristic_var == "IDA* with Manhattan heuristic":
                 solver = IDAStarSolver(self.maze , self.start , self.end , None)
+            elif heuristic_var == "Custom Solver":
+                solver = CustomSolver(self.maze , self.start , self.end , None)
             else:
                 raise ValueError("Invalid heuristic option")
 
@@ -260,6 +268,8 @@ class MazeApp:
 
             if heuristic_var == "IDA* with Manhattan heuristic":
                 accuracy = solver.last_bound
+            elif heuristic_var == "Custom Solver":
+                accuracy = (solver.end_last_bound + solver.start_last_bound)/2
             else:    
                 accuracy = len(path) / len(solver.explored_nodes) if solver.explored_nodes else 0
 
@@ -302,8 +312,8 @@ class MazeApp:
         
 
         self.maze = [[1 for _ in range(self.size)] for _ in range(self.size)]  # Reset maze with walls
-        self.start = (0, 0)
-        self.end = (self.size - 1, self.size - 1)
+        # self.start = (0, 0)
+        # self.end = (self.size - 1, self.size - 1)
         self.prim_maze_generation()
         self.ensure_clear_start_end()
         if self.allow_loops_var.get():
@@ -314,7 +324,6 @@ class MazeApp:
 
     def add_loops(self):
         
-        print ("Adding loops")
         
         potential_walls = []
 
@@ -371,22 +380,78 @@ class MazeApp:
 
                     random.shuffle(walls)
 
+    def randomize_start_end(self):
+        # Helper to get a random point on a specific wall
+        def random_point_on_wall():
+            wall = random.choice(["top", "bottom", "left", "right"])
+            if wall == "top":
+                return (0, random.randint(1, self.size - 2))  # Top row (0, x)
+            elif wall == "bottom":
+                return (self.size - 1, random.randint(1, self.size - 2))  # Bottom row
+            elif wall == "left":
+                return (random.randint(1, self.size - 2), 0)  # Left column (y, 0)
+            elif wall == "right":
+                return (random.randint(1, self.size - 2), self.size - 1)  # Right column
+
+        # Randomize start and end points on the outer wall
+        self.start = random_point_on_wall()
+
+        # Ensure the end point is not the same as the start
+        while True:
+            self.end = random_point_on_wall()
+            if self.end != self.start:
+                break
+
+        sides = ["top", "bottom", "left", "right"]
+        for side in sides:
+            if side == "top":
+                for x in range(0, self.size - 1):
+                    self.maze[0][x] = 1
+            elif side == "bottom":
+                for x in range(0, self.size - 1):
+                    self.maze[self.size - 1][x] = 1
+            elif side == "left":
+                for y in range(0, self.size - 1):
+                    self.maze[y][0] = 1
+            elif side == "right":
+                for y in range(0, self.size - 1):
+                    self.maze[y][self.size - 1] = 1
+
     def ensure_clear_start_end(self):
-        # Clear paths around the start point
+        """Clear paths around the start and end points in the maze."""
+        self.randomize_start_end()
+
+        # turn the start and end points into clear cells
         start_x, start_y = self.start
-        self.maze[start_y][start_x] = 0
-        if start_y + 1 < self.size:
-            self.maze[start_y + 1][start_x] = 0
-        # if start_x + 1 < self.size:
-        #     self.maze[start_y][start_x + 1] = 0
-        
-        # Clear paths around the end point
+        self.maze[start_x][start_y] = 0
         end_x, end_y = self.end
-        self.maze[end_y][end_x] = 0
-        if end_y - 1 >= 0:
-            self.maze[end_y - 1][end_x] = 0
-        # if end_x - 1 >= 0:
-        #     self.maze[end_y][end_x - 1] = 0
+        self.maze[end_x][end_y] = 0
+
+        # Clear paths around the start point
+        if start_x > 0 and self.maze[start_x - 1][start_y] == 1:
+            self.maze[start_x - 1][start_y] = 0
+        elif start_x < self.size - 1 and self.maze[start_x + 1][start_y] == 1:
+            self.maze[start_x + 1][start_y] = 0
+        elif start_y > 0 and self.maze[start_x][start_y - 1] == 1:
+            self.maze[start_x][start_y - 1] = 0
+        elif start_y < self.size - 1 and self.maze[start_x][start_y + 1] == 1:
+            self.maze[start_x][start_y + 1] = 0
+        # Clear paths around the end point
+        if end_x > 0 and self.maze[end_x - 1][end_y] == 1:
+            self.maze[end_x - 1][end_y] = 0    
+        elif end_x < self.size - 1 and self.maze[end_x + 1][end_y] == 1:
+            self.maze[end_x + 1][end_y] = 0
+        elif end_y > 0 and self.maze[end_x][end_y - 1] == 1:
+            self.maze[end_x][end_y - 1] = 0
+        elif end_y < self.size - 1 and self.maze[end_x][end_y + 1] == 1:
+            self.maze[end_x][end_y + 1] = 0
+
+        
+
+
+
+                
+
 
     def draw_maze(self):
         if not self.fig or not self.ax:
@@ -419,7 +484,9 @@ class MazeApp:
         elif heuristic_var == "Bi-directional A* with Manhattan heuristic":
             solver = BiDirectionalManhattanSolver(self.maze , self.start , self.end , self.draw_explored_path)
         elif heuristic_var == "IDA* with Manhattan heuristic":
-            solver = IDAStarSolver(self.maze , self.start , self.end , self.draw_explored_path)       
+            solver = IDAStarSolver(self.maze , self.start , self.end , self.draw_explored_path)
+        elif heuristic_var == "Custom Solver":
+            solver = CustomSolver(self.maze , self.start , self.end , self.draw_explored_path)           
         else :
             raise ValueError("invalid heuristic")
 
@@ -430,6 +497,9 @@ class MazeApp:
         if path:
             if heuristic_var == "IDA* with Manhattan heuristic":
                 accuracy = solver.last_bound
+                self.draw_explored_path(solver.explored_nodes , path , accuracy , show_last_bound = True)  # Draw the explored nodes after the solution
+            elif heuristic_var == "Custom Solver":
+                accuracy = (solver.end_last_bound + solver.start_last_bound)/2
                 self.draw_explored_path(solver.explored_nodes , path , accuracy , show_last_bound = True)  # Draw the explored nodes after the solution
             else:    
                 accuracy = len(path) / len(solver.explored_nodes) if solver.explored_nodes else 0
