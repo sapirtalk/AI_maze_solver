@@ -9,6 +9,8 @@ class CustomSolver:
         self.directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]  # Possible movements: right, down, left, up
         self.explored_nodes = []  # List to keep track of explored nodes
         self.draw_callback = draw_callback
+        self.end_last_bound = 0
+        self.start_last_bound = 0
 
 
     def manhattan_distance(self, current, goal):

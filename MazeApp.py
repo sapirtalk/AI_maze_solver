@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import font
+from tkinter import messagebox
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from Manhatten import ManhattanSolver
@@ -10,6 +11,9 @@ import tracemalloc
 from IDA_star import IDAStarSolver
 from Custom import CustomSolver
 import sys
+import numpy as np
+from scipy.interpolate import make_interp_spline
+import statistics
 
 
 class MazeApp:
@@ -22,8 +26,26 @@ class MazeApp:
         self.end = None
         self.canvas = None
         self.fig, self.ax = None, None  # Initialize figure and axis 
-        self.solver_instance = None  # To store current solver instance 
+        self.solver_instance = None  # To store current solver instance
+        self.xlim = None
+        self.ylim = None
+        self.drag_start = None  # Store the starting point of dragging
+
+        # Bind the close event
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.create_widgets()
+
+
+    def on_close(self):
+        """Handle the window close event to ensure proper cleanup."""
+        # Close any matplotlib figures
+        plt.close('all')
+
+        # Destroy the Tkinter root
+        self.root.destroy()
+
+        # Exit the program
+        sys.exit()
 
     def create_widgets(self):
         # Create frames
@@ -36,6 +58,13 @@ class MazeApp:
         # Define a font for buttons and labels
         button_font = font.Font(family="Helvetica", size=10, weight="bold")
         label_font = font.Font(family="Helvetica", size=10)
+
+        # Add a Reset Camera button
+        self.reset_camera_button = tk.Button(
+            self.control_frame, text="Reset Camera", command=self.reset_view,
+            font=button_font, bg="#FF5722", fg="white", padx=10, pady=5
+        )
+        self.reset_camera_button.pack(side=tk.LEFT, padx=5)
 
         # Maze Size label and entry
         tk.Label(self.control_frame, text="Maze Size:", font=label_font).pack(side=tk.LEFT, padx=5)
@@ -94,6 +123,67 @@ class MazeApp:
         self.heuristic_menu.config(font=label_font, bg="#f0f0f0", padx=5, pady=5)
         self.heuristic_menu.pack(side=tk.LEFT, padx=5)
 
+    def reset_view(self):
+        """Reset the zoom and pan to the default view."""
+        if self.ax:
+            self.ax.set_xlim(0, self.size)
+            self.ax.set_ylim(self.size, 0)
+            self.canvas.draw()
+
+    def enable_zoom_and_drag(self):
+        """Enable zooming and dragging on the maze plot."""
+        self.fig.canvas.mpl_connect('scroll_event', self.on_zoom)
+        self.fig.canvas.mpl_connect('button_press_event', self.on_drag_start)
+        self.fig.canvas.mpl_connect('motion_notify_event', self.on_drag)
+        self.fig.canvas.mpl_connect('button_release_event', self.on_drag_end)
+    
+    def on_zoom(self, event):
+        """Handle zooming with the mouse scroll wheel."""
+        if self.ax:
+            zoom_factor = 1.2
+            x_min, x_max = self.ax.get_xlim()
+            y_min, y_max = self.ax.get_ylim()
+
+            x_range = (x_max - x_min) / 2
+            y_range = (y_max - y_min) / 2
+            x_center = (x_min + x_max) / 2
+            y_center = (y_min + y_max) / 2
+
+            if event.button == 'up':  # Zoom in
+                x_range /= zoom_factor
+                y_range /= zoom_factor
+            elif event.button == 'down':  # Zoom out
+                x_range *= zoom_factor
+                y_range *= zoom_factor
+
+            # Flip the y-axis zoom
+            self.ax.set_xlim(x_center - x_range, x_center + x_range)
+            self.ax.set_ylim(y_center - y_range, y_center + y_range)
+            self.canvas.draw()
+
+
+    def on_drag_start(self, event):
+        """Store the initial point when the mouse is clicked for dragging."""
+        if self.ax and event.button == 1 and event.xdata is not None and event.ydata is not None:  # Check valid event
+            self.drag_start = (event.xdata, event.ydata)
+
+    def on_drag_end(self, event):
+        """Reset drag_start when the mouse button is released."""
+        if event.button == 1:  # Left mouse button
+            self.drag_start = None
+
+    def on_drag(self, event):
+        """Handle dragging to pan the maze."""
+        if self.ax and self.drag_start and event.xdata is not None and event.ydata is not None:  # Check valid event
+            dx = event.xdata - self.drag_start[0]
+            dy = event.ydata - self.drag_start[1]
+            x_min, x_max = self.ax.get_xlim()
+            y_min, y_max = self.ax.get_ylim()
+
+            self.ax.set_xlim(x_min - dx, x_max - dx)
+            self.ax.set_ylim(y_min - dy, y_max - dy)
+            self.drag_start = (event.xdata, event.ydata)
+            self.canvas.draw()
 
     def reset_solver(self):
         """Reset the current solver, keep the maze intact, and reset the visualization."""
@@ -170,7 +260,10 @@ class MazeApp:
             if heuristic_var == "IDA* with Manhattan heuristic":
                 accuracy = solver.last_bound
             elif heuristic_var == "Custom Solver":
+                print("Custom Solver")
                 accuracy = (solver.end_last_bound + solver.start_last_bound)/2
+            elif path is None:
+                accuracy = 0    
             else:    
                 accuracy = len(path) / len(solver.explored_nodes) if solver.explored_nodes else 0
 
@@ -238,59 +331,68 @@ class MazeApp:
 
         plt.show()
 
-
-
-
-
-
-    def graph_size_accuracy(self , heuristic_var):
+    def graph_size_accuracy(self, heuristic_var):
         print("Graphing size and accuracy")
 
-        sizes = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100]
+        sizes = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100]
+        times = 50
         accuracies = []
+
         for size in sizes:
-            self.size = size
-            self.generate_maze()
+            for i in range(times):
+                samples = []
+                self.size = size
+                self.generate_maze()
 
-            if heuristic_var == "A* with Manhattan heuristic":
-                solver = ManhattanSolver(self.maze, self.start, self.end , None)
-            elif heuristic_var == "Bi-directional A* with Manhattan heuristic":
-                solver = BiDirectionalManhattanSolver(self.maze, self.start, self.end , None)
-            elif heuristic_var == "IDA* with Manhattan heuristic":
-                solver = IDAStarSolver(self.maze , self.start , self.end , None)
-            elif heuristic_var == "Custom Solver":
-                solver = CustomSolver(self.maze , self.start , self.end , None)
-            else:
-                raise ValueError("Invalid heuristic option")
+                if heuristic_var == "A* with Manhattan heuristic":
+                    solver = ManhattanSolver(self.maze, self.start, self.end, None)
+                elif heuristic_var == "Bi-directional A* with Manhattan heuristic":
+                    solver = BiDirectionalManhattanSolver(self.maze, self.start, self.end, None)
+                elif heuristic_var == "IDA* with Manhattan heuristic":
+                    messagebox.showerror("Error", "This is only available for algorithms that use memory.")
+                    return
+                elif heuristic_var == "Custom Solver":
+                    solver = CustomSolver(self.maze, self.start, self.end, None)
+                else:
+                    raise ValueError("Invalid heuristic option")
 
-            path = solver.solve()
+                path = solver.solve()
 
+                if heuristic_var == "IDA* with Manhattan heuristic":
+                    accuracy = solver.last_bound
+                elif heuristic_var == "Custom Solver":
+                    accuracy = (solver.end_last_bound + solver.start_last_bound) / 2
+                elif path is None:
+                    print("No solution found")
+                    accuracy = 0
+                else:
+                    accuracy = len(path) / len(solver.explored_nodes) if solver.explored_nodes else 0
 
-            if heuristic_var == "IDA* with Manhattan heuristic":
-                accuracy = solver.last_bound
-            elif heuristic_var == "Custom Solver":
-                accuracy = (solver.end_last_bound + solver.start_last_bound)/2
-            else:    
-                accuracy = len(path) / len(solver.explored_nodes) if solver.explored_nodes else 0
+                samples.append(accuracy)
+            mean_sample = statistics.mean(samples)
+            accuracies.append(mean_sample)
 
-            accuracies.append(accuracy)
+        # Apply interpolation for smoother graph
+        sizes_np = np.array(sizes)
+        accuracies_np = np.array(accuracies)
 
+        # Generate a spline for smooth interpolation
+        spline = make_interp_spline(sizes_np, accuracies_np, k=3)  # Cubic spline
+        smooth_sizes = np.linspace(sizes_np.min(), sizes_np.max(), 500)
+        smooth_accuracies = spline(smooth_sizes)
 
-        # make the line graph smoother
-        for i in range(1, len(accuracies) - 1):
-            accuracies[i] = (accuracies[i - 1] + accuracies[i] + accuracies[i + 1]) / 3
-
-
-        # clear the current figure
+        # Clear the current figure
         plt.clf()
-        plt.plot(sizes, accuracies)
-        
+        plt.plot(smooth_sizes, smooth_accuracies, label="Smoothed Accuracy")
+        plt.scatter(sizes, accuracies, color='red', label="Original Data", zorder=5)  # Optional: show original points
+
         plt.xlabel("Maze Size")
         plt.ylabel("Accuracy")
         plt.title("Accuracy vs. Maze Size - " + heuristic_var)
+        plt.legend()
         plt.show()
+
         
-    
     
     
     
@@ -298,24 +400,25 @@ class MazeApp:
     def update_maze_size(self):
         try:
             size = int(self.size_entry.get())
-            if size < 5:
-                raise ValueError("Size must be greater than 4")
+            if size < 6:
+                raise ValueError("Size must be greater than 6")
             if size % 2 == 0:
                 size += 1  # Ensure size is odd , better for path finding
             self.size = size
             self.generate_maze()
         except ValueError:
-            print("Invalid size input. Please enter a positive integer greater than 4.")
+            print("Invalid size input. Please enter a positive integer greater than 6.")
 
     def generate_maze(self):
-
         
-
         self.maze = [[1 for _ in range(self.size)] for _ in range(self.size)]  # Reset maze with walls
         # self.start = (0, 0)
         # self.end = (self.size - 1, self.size - 1)
+        print ("Maze cleared")
         self.prim_maze_generation()
+        print ("Maze primed")
         self.ensure_clear_start_end()
+        print ("Start and end points ensured")
         if self.allow_loops_var.get():
             self.add_loops()
         self.draw_maze()
@@ -393,13 +496,17 @@ class MazeApp:
             elif wall == "right":
                 return (random.randint(1, self.size - 2), self.size - 1)  # Right column
 
+
         # Randomize start and end points on the outer wall
         self.start = random_point_on_wall()
 
         # Ensure the end point is not the same as the start
         while True:
             self.end = random_point_on_wall()
-            if self.end != self.start:
+            dist = abs(self.start[0] - self.end[0]) + abs(self.start[1] - self.end[1])
+            print (dist)
+            # if the manhatten distance from the start to the end is greater than the size of the maze
+            if dist >= self.size:
                 break
 
         sides = ["top", "bottom", "left", "right"]
@@ -420,40 +527,27 @@ class MazeApp:
     def ensure_clear_start_end(self):
         """Clear paths around the start and end points in the maze."""
         self.randomize_start_end()
-
+        print ("randomized start and end")
         # turn the start and end points into clear cells
         start_x, start_y = self.start
         self.maze[start_x][start_y] = 0
         end_x, end_y = self.end
         self.maze[end_x][end_y] = 0
 
-        # Clear paths around the start point
-        if start_x > 0 and self.maze[start_x - 1][start_y] == 1:
-            self.maze[start_x - 1][start_y] = 0
-        elif start_x < self.size - 1 and self.maze[start_x + 1][start_y] == 1:
-            self.maze[start_x + 1][start_y] = 0
-        elif start_y > 0 and self.maze[start_x][start_y - 1] == 1:
-            self.maze[start_x][start_y - 1] = 0
-        elif start_y < self.size - 1 and self.maze[start_x][start_y + 1] == 1:
-            self.maze[start_x][start_y + 1] = 0
-        # Clear paths around the end point
-        if end_x > 0 and self.maze[end_x - 1][end_y] == 1:
-            self.maze[end_x - 1][end_y] = 0    
-        elif end_x < self.size - 1 and self.maze[end_x + 1][end_y] == 1:
-            self.maze[end_x + 1][end_y] = 0
-        elif end_y > 0 and self.maze[end_x][end_y - 1] == 1:
-            self.maze[end_x][end_y - 1] = 0
-        elif end_y < self.size - 1 and self.maze[end_x][end_y + 1] == 1:
-            self.maze[end_x][end_y + 1] = 0
-
-        
-
-
-
-                
+        # clear all adjacent cells to the start and end points
+        for x in range(start_x - 1, start_x + 2):
+            for y in range(start_y - 1, start_y + 2):
+                if 0 <= x < self.size and 0 <= y < self.size and self.maze[x][y] == 1:
+                    self.maze[x][y] = 0
+        for x in range(end_x - 1, end_x + 2):
+            for y in range(end_y - 1, end_y + 2):
+                if 0 <= x < self.size and 0 <= y < self.size and self.maze[x][y] == 1:
+                    self.maze[x][y] = 0            
+     
 
 
     def draw_maze(self):
+        """Draw the maze and initialize zoom/drag functionality."""
         if not self.fig or not self.ax:
             self.fig, self.ax = plt.subplots(figsize=(6, 6))
             self.ax.imshow(self.maze, cmap='binary')
@@ -465,6 +559,9 @@ class MazeApp:
             self.canvas = FigureCanvasTkAgg(self.fig, master=self.canvas_frame)
             self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
             self.canvas.draw()
+
+            # Enable zoom and drag after creating the plot
+            self.enable_zoom_and_drag()
 
         else:
             self.ax.clear()
@@ -552,14 +649,17 @@ class MazeApp:
 
 
 def quit(root):
+    """Quit the application."""
     root.destroy()
+    sys.exit()
 
 
 def restart(root):
+    """Restart the application."""
     root.destroy()
     root = tk.Tk()
-    tk.Button(root, text="Quit", command=lambda root=root:quit(root)).pack()
-    tk.Button(root, text="Restart", command=lambda root=root:restart(root)).pack()
+    tk.Button(root, text="Quit", command=lambda root=root: quit(root)).pack()
+    tk.Button(root, text="Restart", command=lambda root=root: restart(root)).pack()
     app = MazeApp(root)
     root.mainloop()
 
@@ -567,8 +667,8 @@ def restart(root):
 
 if __name__ == "__main__":
     root = tk.Tk()
-    tk.Button(root, text="Quit", command=lambda root=root:quit(root)).pack()
-    tk.Button(root, text="Restart", command=lambda root=root:restart(root)).pack()
+    tk.Button(root, text="Quit", command=lambda root=root: quit(root)).pack()
+    tk.Button(root, text="Restart", command=lambda root=root: restart(root)).pack()
     app = MazeApp(root)
     root.mainloop()
 

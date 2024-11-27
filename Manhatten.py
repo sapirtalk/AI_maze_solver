@@ -47,6 +47,7 @@ class ManhattanSolver:
                             heapq.heappush(open_set, (f_score[neighbor], neighbor))
             if self.draw_callback is not None:                
                 time.sleep(0.1/self.size)
+        print ("No solution found! reached" + str(len(self.explored_nodes)) + " nodes")                
         return None 
 
     def reconstruct_path(self, came_from, current):
