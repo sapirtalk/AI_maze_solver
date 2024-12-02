@@ -10,14 +10,11 @@ class CustomSolver:
         self.directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]  # Possible movements: right, down, left, up
         self.explored_nodes = []  # List to keep track of explored nodes
         self.draw_callback = draw_callback
-        self.deadends = set()  # Set to store known dead-end nodes
+        self.dead_ends = set()  # Use a set for efficient lookups
+        self.cur_corridor = []  # Tracks the current corridor nodes
 
     def manhattan_distance(self, current, goal):
-        # Add a penalty for dead-end nodes
-        deadend_penalty = 0
-        if self.maze[current[0]][current[1]] > 1:  # Dead-end marker in the grid
-            deadend_penalty = self.maze[current[0]][current[1]] - 1  # Higher penalty for higher markers
-        return abs(current[0] - goal[0]) + abs(current[1] - goal[1]) + deadend_penalty
+        return abs(current[0] - goal[0]) + abs(current[1] - goal[1])
 
     def solve(self):
         bound = self.manhattan_distance(self.start, self.end)
@@ -44,54 +41,67 @@ class CustomSolver:
             return "FOUND"
 
         min_bound = float('inf')
-        neighbors = []
 
-        # Collect valid neighbors
+        # Find valid neighbors
+        neighbors = []
         for direction in self.directions:
             neighbor = (current[0] + direction[0], current[1] + direction[1])
-            if 0 <= neighbor[0] < self.size and 0 <= neighbor[1] < self.size and self.maze[neighbor[0]][neighbor[1]] == 0:
-                if neighbor not in path and neighbor not in self.deadends:
-                    neighbors.append(neighbor)
+            if (
+                0 <= neighbor[0] < self.size
+                and 0 <= neighbor[1] < self.size
+                and self.maze[neighbor[0]][neighbor[1]] == 0  # Open path
+                and neighbor not in self.dead_ends  # Not a dead end
+            ):
+                neighbors.append(neighbor)
 
-        # If only one neighbor exists, we're in a corridor
+        # Sort neighbors by Manhattan distance
+        print(f"Current node: {current}, Neighbors: {neighbors}")
+        neighbors.sort(key=lambda n: self.manhattan_distance(n, self.end))
+
+        # Detect corridor (exactly one way forward)
+        if len(neighbors) < 3:
+            print ("Corridor detected:", neighbors[0])
+            if not self.cur_corridor:  # Start a new corridor
+                self.cur_corridor.append(current)
+                print ("New corridor started:", current)
+            self.cur_corridor.append(neighbors[0])
+
+        # Dead end detection
         if len(neighbors) == 1:
-            corridor = [current]
-            while len(neighbors) == 1:
-                next_node = neighbors[0]
-                corridor.append(next_node)
-                neighbors = []
-                for direction in self.directions:
-                    neighbor = (next_node[0] + direction[0], next_node[1] + direction[1])
-                    if (
-                        0 <= neighbor[0] < self.size
-                        and 0 <= neighbor[1] < self.size
-                        and self.maze[neighbor[0]][neighbor[1]] == 0
-                        and neighbor not in corridor
-                    ):
-                        neighbors.append(neighbor)
-
-            # If corridor ends in a dead end, mark it
-            if not neighbors:  # Dead end detected
-                for node in corridor:
-                    self.deadends.add(node)
-                    self.maze[node[0]][node[1]] += 1  # Mark corridor in maze grid
-                return float('inf')
+            print ("Dead end detected:", current)
+            if self.cur_corridor:
+                # Mark only the first node in the corridor as a dead end
+                first_corridor_node = self.cur_corridor[0]
+                self.dead_ends.add(first_corridor_node)
+                print ("Dead end found:", first_corridor_node)
+            self.cur_corridor.clear()  # Clear the corridor
+            return float('inf')
 
         # Explore neighbors
         for neighbor in neighbors:
-            path.append(neighbor)
+            if neighbor not in path:
+                path.append(neighbor)
 
-            if self.draw_callback is not None:
-                self.draw_callback(path)
+                # Clear the corridor if branching occurs
+                if len(neighbors) > 1:
+                    self.cur_corridor.clear()
 
-            t = self._search(path, g + 1, bound)
+                if self.draw_callback is not None:
+                    self.draw_callback(path, dead_ends=self.dead_ends)
 
-            if t == "FOUND":
-                self.last_bound = bound
-                self.explored_nodes.append(neighbor)
-                return "FOUND"
-            if t < min_bound:
-                min_bound = t
-            path.pop()
+                t = self._search(path, g + 1, bound)
+
+                if t == "FOUND":
+                    self.last_bound = bound
+                    self.explored_nodes.append(neighbor)
+                    return "FOUND"
+                if t < min_bound:
+                    min_bound = t
+
+                path.pop()
+
+                # Remove from corridor if backtracking
+                if neighbor in self.cur_corridor:
+                    self.cur_corridor.remove(neighbor)
 
         return min_bound

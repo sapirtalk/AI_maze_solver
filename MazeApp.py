@@ -596,8 +596,8 @@ class MazeApp:
                 accuracy = solver.last_bound
                 self.draw_explored_path(solver.explored_nodes , path , accuracy , show_last_bound = True)  # Draw the explored nodes after the solution
             elif heuristic_var == "Custom Solver":
-                accuracy = (solver.end_last_bound + solver.start_last_bound)/2
-                self.draw_explored_path(solver.explored_nodes , path , accuracy , show_last_bound = True)  # Draw the explored nodes after the solution
+                accuracy = solver.last_bound
+                self.draw_explored_path(solver.explored_nodes , path , accuracy , show_last_bound = True , dead_ends = solver.dead_ends )  # Draw the explored nodes after the solution
             else:    
                 accuracy = len(path) / len(solver.explored_nodes) if solver.explored_nodes else 0
                 self.draw_explored_path(solver.explored_nodes , path , accuracy)  # Draw the explored nodes after the solution
@@ -605,7 +605,7 @@ class MazeApp:
             print("No path found.")
             self.draw_explored_path(solver.explored_nodes)  # Still draw the explored nodes if no solution
 
-    def draw_explored_path(self, explored_nodes, path=None, accuracy=0, show_last_bound=False):
+    def draw_explored_path(self, explored_nodes, path=None, accuracy=0, show_last_bound=False , dead_ends = None):
         if not self.fig or not self.ax:
             self.fig, self.ax = plt.subplots(figsize=(6, 6))
             self.canvas = FigureCanvasTkAgg(self.fig, master=self.canvas_frame)
@@ -615,6 +615,10 @@ class MazeApp:
 
         # Draw the maze background
         self.ax.imshow(self.maze, cmap='binary')
+
+        if dead_ends:
+            for dead_end in dead_ends:
+                self.ax.scatter(dead_end[1], dead_end[0], c='black', s=50)
 
         # Draw the explored nodes
         for node in explored_nodes:
